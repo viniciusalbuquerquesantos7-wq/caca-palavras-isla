@@ -14,3 +14,4 @@
 - [x] Garantir responsividade mobile
 - [x] Preparar para publicação no GitHub Pages
 - [x] Remover badge "Made with Manus" (não existe no novo projeto)
+- [x] Otimizar layout para mobile (redimensionar grade e elementos)
