@@ -12,4 +12,4 @@
 - [x] Manter cores atuais (gradiente emerald-to-blue)
 - [x] Adicionar ícone da lua 🌙
 - [x] Garantir responsividade mobile
-- [ ] Preparar para publicação no GitHub Pages
+- [x] Preparar para publicação no GitHub Pages
