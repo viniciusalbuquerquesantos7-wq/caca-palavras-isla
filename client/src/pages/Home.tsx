@@ -1,28 +1,325 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { APP_LOGO, APP_TITLE } from "@/const";
-import { Streamdown } from 'streamdown';
+import { Card } from "@/components/ui/card";
 
-/**
- * All content in this page are only for example, replace with your own feature implementation
- * When building pages, remember your instructions in Frontend Best Practices, Design Guide and Common Pitfalls
- */
+interface Word {
+  word: string;
+  hint: string;
+  found: boolean;
+}
+
+interface Position {
+  row: number;
+  col: number;
+}
+
+const WORDS_DATA: Omit<Word, "found">[] = [
+  { word: "DARALISLAM", hint: '"Mundo que aderiu ao Islã" após Maomé.' },
+  { word: "RAMADA", hint: "O nono mês sagrado do calendário Islâmico, dedicado ao jejum e à oração." },
+  { word: "SUNITA", hint: "Muçulmano que segue a tradição da Sunnah e representa a maioria do Islã." },
+  { word: "ALCORAO", hint: "Livro sagrado do Islã, revelado a Maomé." },
+  { word: "CALIFA", hint: "Título dado ao líder político e religioso que sucedeu Maomé." },
+  { word: "ALAH", hint: "Nome de Deus na religião islâmica." },
+  { word: "SHARIA", hint: "Conjunto de leis islâmicas baseadas no Alcorão e na tradição." },
+  { word: "HIJAZ", hint: "Espaço geográfico onde temos a de criação do Islã, engloba Meca e Medina." },
+];
+
+const GRID_SIZE = 18;
+const DIRECTIONS = [
+  { dr: 0, dc: 1 },   // horizontal direita
+  { dr: 0, dc: -1 },  // horizontal esquerda
+  { dr: 1, dc: 0 },   // vertical baixo
+  { dr: -1, dc: 0 },  // vertical cima
+  { dr: 1, dc: 1 },   // diagonal baixo-direita
+  { dr: -1, dc: -1 }, // diagonal cima-esquerda
+  { dr: 1, dc: -1 },  // diagonal baixo-esquerda
+  { dr: -1, dc: 1 },  // diagonal cima-direita
+];
+
+// Caracteres com acentos para preencher a grade
+const ACCENTED_CHARS = "AÀÁÂÃÄÅEÈÉÊËIÌÍÎÏOÒÓÔÕÖUÙÚÛÜÇÑ";
+
+function generateGrid(words: string[]): string[][] {
+  const grid: string[][] = Array(GRID_SIZE).fill(null).map(() => 
+    Array(GRID_SIZE).fill("")
+  );
+
+  // Função para verificar se a palavra cabe na posição
+  const canPlaceWord = (word: string, row: number, col: number, dir: { dr: number; dc: number }): boolean => {
+    for (let i = 0; i < word.length; i++) {
+      const newRow = row + i * dir.dr;
+      const newCol = col + i * dir.dc;
+      
+      if (newRow < 0 || newRow >= GRID_SIZE || newCol < 0 || newCol >= GRID_SIZE) {
+        return false;
+      }
+      
+      if (grid[newRow][newCol] !== "" && grid[newRow][newCol] !== word[i]) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Função para colocar a palavra na grade
+  const placeWord = (word: string, row: number, col: number, dir: { dr: number; dc: number }) => {
+    for (let i = 0; i < word.length; i++) {
+      const newRow = row + i * dir.dr;
+      const newCol = col + i * dir.dc;
+      grid[newRow][newCol] = word[i];
+    }
+  };
+
+  // Tentar colocar cada palavra
+  for (const word of words) {
+    let placed = false;
+    let attempts = 0;
+    const maxAttempts = 100;
+
+    while (!placed && attempts < maxAttempts) {
+      const row = Math.floor(Math.random() * GRID_SIZE);
+      const col = Math.floor(Math.random() * GRID_SIZE);
+      const dir = DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
+
+      if (canPlaceWord(word, row, col, dir)) {
+        placeWord(word, row, col, dir);
+        placed = true;
+      }
+      attempts++;
+    }
+  }
+
+  // Preencher células vazias com letras aleatórias
+  for (let i = 0; i < GRID_SIZE; i++) {
+    for (let j = 0; j < GRID_SIZE; j++) {
+      if (grid[i][j] === "") {
+        grid[i][j] = ACCENTED_CHARS[Math.floor(Math.random() * ACCENTED_CHARS.length)];
+      }
+    }
+  }
+
+  return grid;
+}
+
 export default function Home() {
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
+  const [grid, setGrid] = useState<string[][]>([]);
+  const [words, setWords] = useState<Word[]>([]);
+  const [selectedCells, setSelectedCells] = useState<Position[]>([]);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [foundWords, setFoundWords] = useState<string[]>([]);
 
-  // Use APP_LOGO (as image src) and APP_TITLE if needed
+  useEffect(() => {
+    generateNewGame();
+  }, []);
+
+  const generateNewGame = () => {
+    const wordList = WORDS_DATA.map(w => w.word);
+    const newGrid = generateGrid(wordList);
+    setGrid(newGrid);
+    setWords(WORDS_DATA.map(w => ({ ...w, found: false })));
+    setSelectedCells([]);
+    setFoundWords([]);
+  };
+
+  const handleMouseDown = (row: number, col: number) => {
+    setIsSelecting(true);
+    setSelectedCells([{ row, col }]);
+  };
+
+  const handleMouseEnter = (row: number, col: number) => {
+    if (!isSelecting) return;
+    
+    const lastCell = selectedCells[selectedCells.length - 1];
+    if (!lastCell) return;
+
+    // Verificar se está na mesma linha, coluna ou diagonal
+    const rowDiff = row - selectedCells[0].row;
+    const colDiff = col - selectedCells[0].col;
+    
+    if (rowDiff === 0 || colDiff === 0 || Math.abs(rowDiff) === Math.abs(colDiff)) {
+      setSelectedCells(prev => {
+        const newCells = [prev[0]];
+        const dr = rowDiff === 0 ? 0 : rowDiff > 0 ? 1 : -1;
+        const dc = colDiff === 0 ? 0 : colDiff > 0 ? 1 : -1;
+        const steps = Math.max(Math.abs(rowDiff), Math.abs(colDiff));
+        
+        for (let i = 1; i <= steps; i++) {
+          newCells.push({
+            row: prev[0].row + i * dr,
+            col: prev[0].col + i * dc
+          });
+        }
+        return newCells;
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (!isSelecting) return;
+    setIsSelecting(false);
+
+    // Verificar se a seleção forma uma palavra
+    const selectedWord = selectedCells.map(pos => grid[pos.row][pos.col]).join("");
+    const selectedWordReverse = selectedWord.split("").reverse().join("");
+
+    const foundWord = words.find(w => 
+      !w.found && (w.word === selectedWord || w.word === selectedWordReverse)
+    );
+
+    if (foundWord) {
+      setWords(prev => prev.map(w => 
+        w.word === foundWord.word ? { ...w, found: true } : w
+      ));
+      setFoundWords(prev => [...prev, foundWord.word]);
+    }
+
+    setSelectedCells([]);
+  };
+
+  const isCellSelected = (row: number, col: number) => {
+    return selectedCells.some(pos => pos.row === row && pos.col === col);
+  };
+
+  const progress = words.filter(w => w.found).length;
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <main>
-        {/* Example: lucide-react for icons */}
-        <Loader2 className="animate-spin" />
-        Example Page
-        {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
-        <Button variant="default">Example Button</Button>
-      </main>
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-blue-50 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center mb-4">
+            <div className="text-4xl">🌙</div>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold text-emerald-900 mb-2">
+            Caça-Palavras do Islã
+          </h1>
+          <p className="text-lg text-emerald-700 mb-6">
+            Encontre as palavras relacionadas à História do Islã
+          </p>
+          
+          {/* Progress Bar */}
+          <div className="max-w-2xl mx-auto mb-4">
+            <div className="flex justify-between text-sm text-emerald-700 mb-2">
+              <span>Progresso</span>
+              <span>{progress}/{words.length}</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div 
+                className="bg-emerald-500 h-3 rounded-full transition-all duration-300"
+                style={{ width: `${(progress / words.length) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Grid Section */}
+          <div className="lg:col-span-2">
+            <Card className="p-4 md:p-6 bg-white shadow-lg">
+              <div className="overflow-x-auto">
+                <div 
+                  className="inline-block min-w-full"
+                  onMouseLeave={() => {
+                    if (isSelecting) {
+                      setIsSelecting(false);
+                      setSelectedCells([]);
+                    }
+                  }}
+                >
+                  <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))` }}>
+                    {grid.map((row, rowIndex) =>
+                      row.map((cell, colIndex) => (
+                        <div
+                          key={`${rowIndex}-${colIndex}`}
+                          className={`
+                            aspect-square flex items-center justify-center text-xs md:text-sm font-semibold
+                            border border-emerald-200 cursor-pointer select-none transition-colors
+                            ${isCellSelected(rowIndex, colIndex) 
+                              ? "bg-emerald-500 text-white" 
+                              : "bg-white text-emerald-900 hover:bg-emerald-50"
+                            }
+                          `}
+                          onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
+                          onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
+                          onMouseUp={handleMouseUp}
+                        >
+                          {cell}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-6 text-center">
+                <Button 
+                  onClick={generateNewGame}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  🔄 Gerar Novo Caça-Palavras
+                </Button>
+              </div>
+            </Card>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Hints Section */}
+            <Card className="p-6 bg-white shadow-lg">
+              <h2 className="text-2xl font-bold text-emerald-900 mb-4">Dicas</h2>
+              <div className="space-y-3">
+                {words.map((word, index) => (
+                  <div key={index} className="flex gap-3">
+                    <div className={`
+                      w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center
+                      ${word.found 
+                        ? "border-emerald-500 bg-emerald-500" 
+                        : "border-gray-300"
+                      }
+                    `}>
+                      {word.found && (
+                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className={`text-sm font-semibold ${word.found ? "text-emerald-600" : "text-gray-700"}`}>
+                        {word.word}
+                      </p>
+                      <p className="text-xs text-gray-600 mt-1">{word.hint}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Found Words Section */}
+            <Card className="p-6 bg-white shadow-lg">
+              <h2 className="text-2xl font-bold text-emerald-900 mb-4">Palavras Encontradas</h2>
+              {foundWords.length === 0 ? (
+                <p className="text-gray-500 text-sm">
+                  Nenhuma palavra encontrada ainda...
+                  <br /><br />
+                  Selecione as letras na grade para encontrar as palavras. Você pode selecionar em qualquer direção!
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {foundWords.map((word, index) => (
+                    <span 
+                      key={index}
+                      className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-semibold"
+                    >
+                      {word}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
