@@ -13,3 +13,4 @@
 - [x] Adicionar ícone da lua 🌙
 - [x] Garantir responsividade mobile
 - [x] Preparar para publicação no GitHub Pages
+- [x] Remover badge "Made with Manus" (não existe no novo projeto)
